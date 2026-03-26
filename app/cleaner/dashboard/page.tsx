@@ -1,45 +1,43 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { BottomNav } from '@/components/cleaner/BottomNav'
 import { useToast } from '@/components/ui/use-toast'
-import { STATUS_LABELS, STATUS_COLORS, type BookingStatus } from '@/types'
+import { type BookingStatus } from '@/types'
 import { formatPrice } from '@/lib/utils'
 import {
   Calendar,
   Clock,
   MapPin,
   Phone,
-  ChevronRight,
   LogOut,
   LayoutDashboard,
   Star,
   TrendingUp,
   CalendarCheck,
+  Loader2,
 } from 'lucide-react'
 
-// Mock data
+// Mock data (fallback)
 const MOCK_BOOKINGS = [
   {
     id: '1',
     orderNo: 'CL1A2B3C4D',
     status: 'CONFIRMED' as BookingStatus,
-    serviceName: '深度清潔',
-    serviceIcon: '✨',
+    serviceType: 'DEEP',
+    service: { name: '深度清潔', icon: '✨' },
     scheduledDate: '2026-03-27',
     startTime: '09:00',
     endTime: '13:00',
     durationHours: 4,
     address: '台北市大安區忠孝東路四段100號 5樓',
-    customerName: '陳小姐',
-    customerPhone: '0912-345-678',
+    customer: { name: '陳小姐', phone: '0912-345-678' },
     totalPrice: 2800,
     note: '有養貓，請注意',
   },
@@ -47,51 +45,25 @@ const MOCK_BOOKINGS = [
     id: '2',
     orderNo: 'CL2E3F4G5H',
     status: 'PENDING' as BookingStatus,
-    serviceName: '一般清潔',
-    serviceIcon: '🧹',
+    serviceType: 'REGULAR',
+    service: { name: '一般清潔', icon: '🧹' },
     scheduledDate: '2026-03-28',
     startTime: '13:00',
     endTime: '15:00',
     durationHours: 2,
     address: '台北市信義區松仁路100號',
-    customerName: '林先生',
-    customerPhone: '0923-456-789',
+    customer: { name: '林先生', phone: '0923-456-789' },
     totalPrice: 1200,
     note: '',
   },
-  {
-    id: '3',
-    orderNo: 'CL3I4J5K6L',
-    status: 'COMPLETED' as BookingStatus,
-    serviceName: '搬家清潔',
-    serviceIcon: '🏠',
-    scheduledDate: '2026-03-20',
-    startTime: '09:00',
-    endTime: '15:00',
-    durationHours: 6,
-    address: '台北市中山區民生東路二段50號',
-    customerName: '王先生',
-    customerPhone: '0934-567-890',
-    totalPrice: 4500,
-    note: '',
-  },
-  {
-    id: '4',
-    orderNo: 'CL4M5N6O7P',
-    status: 'IN_PROGRESS' as BookingStatus,
-    serviceName: '辦公室清潔',
-    serviceIcon: '🏢',
-    scheduledDate: '2026-03-26',
-    startTime: '08:00',
-    endTime: '11:00',
-    durationHours: 3,
-    address: '台北市松山區南京東路三段200號 8樓',
-    customerName: '張小姐',
-    customerPhone: '0945-678-901',
-    totalPrice: 2000,
-    note: '門禁需聯繫管理室',
-  },
 ]
+
+const SERVICE_ICONS: Record<string, string> = {
+  REGULAR: '🧹',
+  DEEP: '✨',
+  MOVE_IN_OUT: '🏠',
+  OFFICE: '🏢',
+}
 
 const STATS = [
   { label: '本月完成', value: '12', icon: CalendarCheck, color: 'text-green-600', bg: 'bg-green-50' },
@@ -102,11 +74,51 @@ const STATS = [
 
 type FilterStatus = 'ALL' | BookingStatus
 
+interface BookingItem {
+  id: string
+  orderNo: string
+  status: BookingStatus
+  serviceType: string
+  service?: { name: string } | null
+  scheduledDate: string
+  startTime: string
+  endTime: string
+  durationHours: number
+  address: string
+  customer?: { name?: string | null; phone?: string | null } | null
+  totalPrice: number
+  note?: string | null
+}
+
 export default function CleanerDashboardPage() {
   const [filter, setFilter] = useState<FilterStatus>('ALL')
+  const [bookings, setBookings] = useState<BookingItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
   const { toast } = useToast()
 
-  const filtered = MOCK_BOOKINGS.filter((b) => filter === 'ALL' || b.status === filter)
+  useEffect(() => {
+    async function fetchBookings() {
+      try {
+        setLoading(true)
+        setError(null)
+        const res = await fetch('/api/bookings')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        setBookings(data)
+      } catch (err) {
+        console.warn('[CleanerDashboard] API failed, using mock data:', err)
+        setError('載入失敗')
+        setBookings(MOCK_BOOKINGS as BookingItem[])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchBookings()
+  }, [])
+
+  const filtered = bookings.filter((b) => filter === 'ALL' || b.status === filter)
 
   const filterOptions: Array<{ value: FilterStatus; label: string }> = [
     { value: 'ALL', label: '全部' },
@@ -116,17 +128,53 @@ export default function CleanerDashboardPage() {
     { value: 'COMPLETED', label: '已完成' },
   ]
 
-  const handleAcceptJob = () => {
-    toast({ title: '接案成功', description: '訂單已確認，請準時前往服務', variant: 'success' })
+  async function patchBooking(bookingId: string, status: BookingStatus) {
+    setActionLoading((prev) => ({ ...prev, [bookingId]: true }))
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? `HTTP ${res.status}`)
+      }
+      const updated = await res.json()
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, status: updated.status } : b)),
+      )
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '未知錯誤'
+      toast({
+        variant: 'destructive',
+        title: '操作失敗',
+        description: message,
+      })
+      return false
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [bookingId]: false }))
+    }
   }
 
-  const handleCompleteJob = () => {
-    toast({ title: '服務完成', description: '已標記此訂單為完成，感謝您的服務！', variant: 'success' })
+  async function handleConfirmJob(bookingId: string) {
+    const ok = await patchBooking(bookingId, 'CONFIRMED')
+    if (ok) toast({ title: '接案成功', description: '訂單已確認，請準時前往服務', variant: 'success' })
+  }
+
+  async function handleAcceptJob(bookingId: string) {
+    const ok = await patchBooking(bookingId, 'IN_PROGRESS')
+    if (ok) toast({ title: '服務開始', description: '已標記服務開始，祝工作順利！', variant: 'success' })
+  }
+
+  async function handleCompleteJob(bookingId: string) {
+    const ok = await patchBooking(bookingId, 'COMPLETED')
+    if (ok) toast({ title: '服務完成', description: '已標記此訂單為完成，感謝您的服務！', variant: 'success' })
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar + Main Layout */}
       <div className="flex">
         {/* Sidebar */}
         <aside className="w-56 min-h-screen bg-white border-r hidden md:flex flex-col">
@@ -218,7 +266,7 @@ export default function CleanerDashboardPage() {
                 {opt.label}
                 {opt.value !== 'ALL' && (
                   <span className="ml-1 text-xs">
-                    ({MOCK_BOOKINGS.filter((b) => b.status === opt.value).length})
+                    ({bookings.filter((b) => b.status === opt.value).length})
                   </span>
                 )}
               </button>
@@ -227,72 +275,136 @@ export default function CleanerDashboardPage() {
 
           {/* Bookings list */}
           <div className="space-y-3">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <>
+                {[1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardContent className="p-5">
+                      <div className="animate-pulse space-y-3">
+                        <div className="flex justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gray-200 rounded" />
+                            <div className="space-y-1">
+                              <div className="h-4 w-24 bg-gray-200 rounded" />
+                              <div className="h-3 w-32 bg-gray-100 rounded" />
+                            </div>
+                          </div>
+                          <div className="h-6 w-16 bg-gray-200 rounded-full" />
+                        </div>
+                        <div className="h-px bg-gray-100" />
+                        <div className="space-y-2">
+                          <div className="h-3 w-40 bg-gray-100 rounded" />
+                          <div className="h-3 w-32 bg-gray-100 rounded" />
+                          <div className="h-3 w-56 bg-gray-100 rounded" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </>
+            ) : error && bookings.length === 0 ? (
+              <EmptyState icon="⚠️" title="載入失敗" description="無法取得預約資料，請稍後再試" />
+            ) : filtered.length === 0 ? (
               <EmptyState
                 icon="📭"
                 title="目前沒有符合條件的預約"
                 description="請調整篩選條件或等待新訂單"
               />
             ) : (
-              filtered.map((booking) => (
-                <Card key={booking.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{booking.serviceIcon}</span>
-                        <div>
-                          <div className="font-semibold text-gray-900">{booking.serviceName}</div>
-                          <div className="text-xs text-gray-400 font-mono">{booking.orderNo}</div>
+              filtered.map((booking) => {
+                const isActioning = actionLoading[booking.id]
+                const serviceIcon = SERVICE_ICONS[booking.serviceType] ?? '🧹'
+                const serviceName = booking.service?.name ?? booking.serviceType
+                const scheduledStr =
+                  typeof booking.scheduledDate === 'string'
+                    ? booking.scheduledDate.slice(0, 10)
+                    : new Date(booking.scheduledDate).toISOString().slice(0, 10)
+
+                return (
+                  <Card key={booking.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{serviceIcon}</span>
+                          <div>
+                            <div className="font-semibold text-gray-900">{serviceName}</div>
+                            <div className="text-xs text-gray-400 font-mono">{booking.orderNo}</div>
+                          </div>
+                        </div>
+                        <StatusBadge status={booking.status} />
+                      </div>
+
+                      <Separator className="my-3" />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mb-3">
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          {scheduledStr}
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Clock className="h-4 w-4 text-gray-400" />
+                          {booking.startTime}–{booking.endTime}（{booking.durationHours}小時）
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-600 sm:col-span-2">
+                          <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                          {booking.address}
+                        </div>
+                        {booking.customer && (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Phone className="h-4 w-4 text-gray-400" />
+                            {booking.customer.name} · {booking.customer.phone}
+                          </div>
+                        )}
+                      </div>
+
+                      {booking.note && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800 mb-3">
+                          📝 {booking.note}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-teal-600">
+                          {formatPrice(booking.totalPrice)}
+                        </span>
+                        <div className="flex gap-2">
+                          {booking.status === 'PENDING' && (
+                            <Button
+                              size="sm"
+                              className="bg-teal-600 hover:bg-teal-700"
+                              disabled={isActioning}
+                              onClick={() => handleConfirmJob(booking.id)}
+                            >
+                              {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : '確認接案'}
+                            </Button>
+                          )}
+                          {booking.status === 'CONFIRMED' && (
+                            <Button
+                              size="sm"
+                              className="bg-teal-600 hover:bg-teal-700"
+                              disabled={isActioning}
+                              onClick={() => handleAcceptJob(booking.id)}
+                            >
+                              {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : '開始服務'}
+                            </Button>
+                          )}
+                          {booking.status === 'IN_PROGRESS' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-green-400 text-green-600 hover:bg-green-50"
+                              disabled={isActioning}
+                              onClick={() => handleCompleteJob(booking.id)}
+                            >
+                              {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : '完成服務'}
+                            </Button>
+                          )}
                         </div>
                       </div>
-                      <StatusBadge status={booking.status} />
-                    </div>
-
-                    <Separator className="my-3" />
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mb-3">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        {booking.scheduledDate}
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Clock className="h-4 w-4 text-gray-400" />
-                        {booking.startTime}–{booking.endTime}（{booking.durationHours}小時）
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600 sm:col-span-2">
-                        <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                        {booking.address}
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Phone className="h-4 w-4 text-gray-400" />
-                        {booking.customerName} · {booking.customerPhone}
-                      </div>
-                    </div>
-
-                    {booking.note && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800 mb-3">
-                        📝 {booking.note}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-teal-600">
-                        {formatPrice(booking.totalPrice)}
-                      </span>
-                      {booking.status === 'CONFIRMED' && (
-                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={handleAcceptJob}>
-                          開始服務
-                        </Button>
-                      )}
-                      {booking.status === 'IN_PROGRESS' && (
-                        <Button size="sm" variant="outline" className="border-green-400 text-green-600 hover:bg-green-50" onClick={handleCompleteJob}>
-                          完成服務
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                )
+              })
             )}
           </div>
         </main>
