@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  CLEANER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING      // 待確認
+  CONFIRMED    // 已確認
+  IN_PROGRESS  // 進行中
+  COMPLETED    // 已完成
+  CANCELLED    // 已取消
+}
+
+enum PaymentStatus {
+  UNPAID   // 未付款
+  PAID     // 已付款
+  REFUNDED // 已退款
+}
+
+enum ServiceType {
+  REGULAR       // 一般清潔（2h）
+  DEEP          // 深度清潔（4h）
+  MOVE_IN_OUT   // 搬家清潔（6h）
+  OFFICE        // 辦公室清潔（3h）
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  phone         String?
+  role          Role      @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts  Account[]
+  sessions  Session[]
+  bookings  Booking[] @relation("CustomerBookings")
+  cleaner   Cleaner?
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Cleaner {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  bio         String?  @db.Text
+  rating      Float    @default(0)
+  totalJobs   Int      @default(0)
+  isVerified  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  serviceArea String[] // 服務區域（台北市大安區等）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings     Booking[]         @relation("CleanerBookings")
+  availability CleanerAvailability[]
+}
+
+model CleanerAvailability {
+  id        String   @id @default(cuid())
+  cleanerId String
+  date      DateTime @db.Date
+  startTime String   // "09:00"
+  endTime   String   // "18:00"
+  isBooked  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  cleaner Cleaner @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@unique([cleanerId, date, startTime])
+  @@index([cleanerId, date])
+}
+
+model Service {
+  id            String      @id @default(cuid())
+  type          ServiceType @unique
+  name          String      // 服務名稱（顯示用）
+  description   String?     @db.Text
+  basePrice     Int         // NTD 基本價格
+  durationHours Float       // 標準服務時數
+  extraHourRate Int         @default(500) // NTD/小時（超時加價）
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  bookings      Booking[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  bookingId       String        @unique
+  amount          Int           // NTD 實付金額
+  status          PaymentStatus @default(UNPAID)
+  gateway         String        @default("ecpay") // 金流商
+  merchantTradeNo String?       @unique           // 廠商交易編號（送出給 ECPay）
+  tradeNo         String?                         // ECPay 回傳交易編號
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  refundAmount    Int?
+  rawResponse     Json?         // 金流回傳原始資料（供對帳用）
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([merchantTradeNo])
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  orderNo       String        @unique @default(cuid())
+  customerId    String
+  cleanerId     String?
+  serviceType   ServiceType
+  status        BookingStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(UNPAID)
+
+  // 服務地址
+  address       String
+  district      String        // 行政區
+  city          String        @default("台北市")
+  floor         String?
+  note          String?       @db.Text
+
+  // 服務時間
+  scheduledDate DateTime      @db.Date
+  startTime     String        // "09:00"
+  endTime       String        // "11:00"
+  durationHours Float         // 2, 4, 6...
+
+  // 費用
+  basePrice     Int           // NTD
+  extraHours    Float         @default(0)
+  extraPrice    Int           @default(0)
+  totalPrice    Int
+
+  // ECPay
+  ecpayTradeNo  String?
+  paidAt        DateTime?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // 服務項目（關聯 Service catalog）
+  serviceId     String?
+
+  customer User    @relation("CustomerBookings", fields: [customerId], references: [id])
+  cleaner  Cleaner? @relation("CleanerBookings", fields: [cleanerId], references: [id])
+  service  Service? @relation(fields: [serviceId], references: [id])
+  payment  Payment?
+
+  @@index([customerId])
+  @@index([cleanerId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([serviceId])
+}

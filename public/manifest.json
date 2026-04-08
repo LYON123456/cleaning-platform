@@ -1,0 +1,70 @@
+{
+  "name": "潔淨家 師傅 App",
+  "short_name": "CleanHome Pro",
+  "description": "清潔師傅接單與行程管理平台",
+  "start_url": "/cleaner/dashboard",
+  "scope": "/cleaner",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5e9",
+  "lang": "zh-TW",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "今日行程",
+      "short_name": "今日",
+      "description": "查看今日預約行程",
+      "url": "/cleaner/schedule",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "待接訂單",
+      "short_name": "接單",
+      "description": "查看待接新訂單",
+      "url": "/cleaner/orders/pending",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "我的收入",
+      "short_name": "收入",
+      "description": "查看收入與結算紀錄",
+      "url": "/cleaner/earnings",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    }
+  ],
+  "prefer_related_applications": false
+}
